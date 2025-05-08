@@ -11,17 +11,17 @@ def load_master(master_csv):
         dtype={'勘定科目コード': str, '勘定科目名称': str, '貸借区分': int},
         keep_default_na=False
     )
-    # 必須列がなければ追加し、NaNや空文字は0として扱う
+    # 必須列がなければ0で初期化、空白や欠損は0扱い
     if '必須' not in df.columns:
         df['必須'] = 0
     else:
-        # 空文字や欠損値を0に
         df['必須'] = df['必須'].replace('', '0').astype(int)
     return df[['勘定科目コード', '貸借区分', '必須']]
 
 def sample_accounts(master_df, sample_ratio_range=(0.8, 1.0), min_accounts=2):
     """
     必須フラグONの勘定科目は必ず含め、残りをランダムサンプリングして返す
+    sample_ratio_range: 全体母数に対するサンプリング比の範囲
     """
     required = master_df[master_df['必須'] == 1]
     optional = master_df[master_df['必須'] != 1]
@@ -35,17 +35,16 @@ def sample_accounts(master_df, sample_ratio_range=(0.8, 1.0), min_accounts=2):
 
 def generate_amounts(accounts_df, prev_abs=None, noise_level=0.1,
                      min_amount=1000, max_amount=10000000, rounding_unit=1):
-    """
-    各勘定科目の金額を生成し、貸借を一致させ、指定桁で丸める
-    """
     count = len(accounts_df)
     drcr = accounts_df['貸借区分'].values
+    # 絶対値生成
     if prev_abs is None:
         abs_vals = np.random.randint(min_amount, max_amount + 1, size=count).astype(float)
     else:
         factors = np.random.normal(1, noise_level, size=count)
         abs_vals = prev_abs * factors
         abs_vals = np.clip(abs_vals, 0, None)
+    # 貸借バランス調整
     debit_mask = drcr == 1
     credit_mask = drcr == -1
     debit_vals = abs_vals[debit_mask]
@@ -61,6 +60,7 @@ def generate_amounts(accounts_df, prev_abs=None, noise_level=0.1,
     balanced_abs = np.empty_like(abs_vals)
     balanced_abs[debit_mask] = debit_rounded
     balanced_abs[credit_mask] = credit_rounded
+    # 指定単位で丸め
     if rounding_unit and rounding_unit > 1:
         rounded_abs = np.floor(balanced_abs / rounding_unit) * rounding_unit
         rd_debit = rounded_abs[debit_mask]
@@ -81,20 +81,33 @@ def generate_company_data(accounts_df, periods, noise_level=0.1, rounding_unit=1
     results = []
     prev_abs = None
     for _ in range(periods):
-        signed, prev_abs = generate_amounts(accounts_df, prev_abs, noise_level,
-                                             rounding_unit=rounding_unit)
+        signed, prev_abs = generate_amounts(
+            accounts_df, prev_abs, noise_level, rounding_unit=rounding_unit)
         results.append(signed)
     return results
 
-def main(master_csv, output_dir, num_child, periods, noise_level=0.1, rounding_unit=1):
+def main(master_csv, output_dir, num_child, periods, noise_level=0.1, rounding_unit=1,
+         parent_ratio_range=(0.9, 1.0), child_ratio_range=(0.7, 0.9)):
     master_df = load_master(master_csv)
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
+
     num_companies = 1 + num_child
     for idx in range(num_companies):
-        name = 'parent' if idx == 0 else f'child{idx}'
-        accounts = sample_accounts(master_df)
+        # 親会社は多め、子会社は少なめ
+        if idx == 0:
+            ratio_range = parent_ratio_range
+            name = 'parent'
+        else:
+            ratio_range = child_ratio_range
+            name = f'child{idx}'
+
+        # サンプリング
+        accounts = sample_accounts(master_df, sample_ratio_range=ratio_range)
+        # データ生成
         period_data = generate_company_data(accounts, periods, noise_level, rounding_unit)
+
+        # ファイル出力
         for p, amounts in enumerate(period_data, start=1):
             df_out = pd.DataFrame({
                 '勘定科目コード': accounts['勘定科目コード'].values,
@@ -102,6 +115,7 @@ def main(master_csv, output_dir, num_child, periods, noise_level=0.1, rounding_u
             })
             file_path = output_dir / f"{name}_period_{p}.txt"
             df_out.to_csv(file_path, sep='\t', index=False, header=False)
+
     print(f"Generated data for {num_companies} companies over {periods} periods in {output_dir}")
 
 if __name__ == '__main__':
@@ -113,7 +127,16 @@ if __name__ == '__main__':
     parser.add_argument('--periods', type=int, default=2, help='number of periods')
     parser.add_argument('--noise', type=float, default=0.1, help='noise level for trends')
     parser.add_argument('--rounding', type=int, default=100, help='rounding unit (e.g.100,1000)')
+    parser.add_argument('--parent-ratio', type=str, default='0.9,1.0',
+                        help='Parent sample ratio range, e.g. "0.9,1.0"')
+    parser.add_argument('--child-ratio', type=str, default='0.7,0.9',
+                        help='Child sample ratio range, e.g. "0.7,0.9"')
     args = parser.parse_args()
+
+    # サンプリング比率をタプルに変換
+    parent_ratio = tuple(map(float, args.parent_ratio.split(',')))
+    child_ratio = tuple(map(float, args.child_ratio.split(',')))
+
     main(args.master, args.output, args.child, args.periods, args.noise, args.rounding)
 
     # python GenerateTestData.py --master account_master.csv --output output
