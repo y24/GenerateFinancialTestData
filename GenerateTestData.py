@@ -18,6 +18,25 @@ def load_master(master_csv):
         df['必須'] = df['必須'].replace('', '0').astype(int)
     return df[['勘定科目コード', '貸借区分', '必須']]
 
+def load_company_master(company_master_csv):
+    """
+    会社マスタCSVから会社コードを読み込む
+    重複チェックも行う
+    """
+    df = pd.read_csv(
+        company_master_csv,
+        dtype={'会社コード': str},
+        keep_default_na=False
+    )
+    
+    # 重複チェック
+    duplicates = df['会社コード'].duplicated()
+    if duplicates.any():
+        duplicate_codes = df[duplicates]['会社コード'].unique()
+        raise ValueError(f"会社コードが重複しています: {', '.join(duplicate_codes)}")
+    
+    return df['会社コード'].tolist()
+
 def sample_accounts(master_df, sample_ratio_range=(0.8, 1.0), min_accounts=2):
     """
     必須フラグONの勘定科目は必ず含め、残りをランダムサンプリングして返す
@@ -86,21 +105,27 @@ def generate_company_data(accounts_df, periods, noise_level=0.1, rounding_unit=1
         results.append(signed)
     return results
 
-def main(master_csv, output_dir, num_child, periods, noise_level=0.1, rounding_unit=1,
+def main(master_csv, company_master_csv, output_dir, periods, noise_level=0.1, rounding_unit=1,
          parent_ratio_range=(0.9, 1.0), child_ratio_range=(0.7, 0.9)):
     master_df = load_master(master_csv)
+    company_codes = load_company_master(company_master_csv)
+    
+    if len(company_codes) < 2:
+        raise ValueError("会社マスタには少なくとも親会社と1つの子会社が必要です")
+    
+    parent_code = company_codes[0]
+    child_codes = company_codes[1:]
+    num_companies = len(company_codes)
+    
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    num_companies = 1 + num_child
-    for idx in range(num_companies):
+    for idx, company_code in enumerate(company_codes):
         # 親会社は多め、子会社は少なめ
         if idx == 0:
             ratio_range = parent_ratio_range
-            name = 'parent'
         else:
             ratio_range = child_ratio_range
-            name = f'child{idx}'
 
         # サンプリング
         accounts = sample_accounts(master_df, sample_ratio_range=ratio_range)
@@ -113,7 +138,7 @@ def main(master_csv, output_dir, num_child, periods, noise_level=0.1, rounding_u
                 '勘定科目コード': accounts['勘定科目コード'].values,
                 '金額': amounts
             })
-            file_path = output_dir / f"{name}_period_{p}.txt"
+            file_path = output_dir / f"{company_code}_X{p}.txt"
             df_out.to_csv(file_path, sep='\t', index=False, header=False)
 
     print(f"Generated data for {num_companies} companies over {periods} periods in {output_dir}")
@@ -122,8 +147,8 @@ if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description='Generate test data for consolidated accounting system')
     parser.add_argument('--master', required=True, help='account master CSV path')
+    parser.add_argument('--company-master', required=True, help='company master CSV path')
     parser.add_argument('--output', required=True, help='output directory')
-    parser.add_argument('--child', type=int, default=1, help='number of child companies')
     parser.add_argument('--periods', type=int, default=2, help='number of periods')
     parser.add_argument('--noise', type=float, default=0.1, help='noise level for trends')
     parser.add_argument('--rounding', type=int, default=100, help='rounding unit (e.g.100,1000)')
@@ -137,6 +162,8 @@ if __name__ == '__main__':
     parent_ratio = tuple(map(float, args.parent_ratio.split(',')))
     child_ratio = tuple(map(float, args.child_ratio.split(',')))
 
-    main(args.master, args.output, args.child, args.periods, args.noise, args.rounding)
+    main(args.master, args.company_master, args.output, args.periods, args.noise, args.rounding,
+         parent_ratio, child_ratio)
 
-    # python GenerateTestData.py --master account_master.csv --output output
+    # Usage:
+    # python GenerateTestData.py --master account_master.csv --company-master company_master.csv --output output
