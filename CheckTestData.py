@@ -12,6 +12,8 @@ def load_account_master():
         '貸借区分': 'balance_type',
         '必須': 'required'
     })
+    # account_codeを文字列型に変換
+    df['account_code'] = df['account_code'].astype(str)
     return df
 
 def load_test_data():
@@ -22,6 +24,8 @@ def load_test_data():
     for file in output_dir.glob('*.txt'):
         # タブ区切りのテキストファイルを読み込み
         df = pd.read_csv(file, sep='\t', header=None, names=['account_code', 'amount'])
+        # account_codeを文字列型に変換
+        df['account_code'] = df['account_code'].astype(str)
         test_data.append(df)
     
     return pd.concat(test_data, ignore_index=True)
@@ -36,9 +40,14 @@ def check_balance(test_data, account_master):
         how='left'
     )
     
-    # 借方・貸方の合計を計算（金額が正の場合は借方、負の場合は貸方）
-    debit_total = merged_data[merged_data['amount'] > 0]['amount'].sum()
-    credit_total = abs(merged_data[merged_data['amount'] < 0]['amount'].sum())
+    # 貸借区分に基づいて金額を計算
+    # balance_type = 1 の場合、正の金額が借方
+    # balance_type = -1 の場合、正の金額が貸方
+    debit_entries = merged_data[merged_data['balance_type'] == 1]
+    credit_entries = merged_data[merged_data['balance_type'] == -1]
+    
+    debit_total = debit_entries['amount'].sum()
+    credit_total = credit_entries['amount'].sum()
     
     # バランスチェック
     is_balanced = abs(debit_total - credit_total) < 0.01  # 小数点以下の誤差を許容
@@ -65,6 +74,14 @@ def main():
         print(f'貸方合計: {result["credit_total"]:,.0f}円')
         print(f'差額: {result["difference"]:,.0f}円')
         print(f'バランス状態: {"OK" if result["is_balanced"] else "NG"}')
+        
+        # 詳細情報の表示
+        print('\n=== 勘定科目別集計 ===')
+        account_master_dict = dict(zip(account_master['account_code'], account_master['account_name']))
+        grouped = test_data.groupby('account_code')['amount'].sum()
+        for code, amount in grouped.items():
+            name = account_master_dict.get(code, '不明')
+            print(f'{code} ({name}): {amount:,.0f}円')
         
     except Exception as e:
         print(f'エラーが発生しました: {str(e)}')
