@@ -93,15 +93,24 @@ def generate_amounts(accounts_df, prev_abs=None, noise_level=0.1,
     balanced_abs[credit_mask] = credit_rounded
     # 指定単位で丸め
     if rounding_unit and rounding_unit > 1:
-        rounded_abs = np.floor(balanced_abs / rounding_unit) * rounding_unit
+        # 借方と貸方を別々に丸める
+        rounded_abs = np.empty_like(balanced_abs)
+        rounded_abs[debit_mask] = np.round(balanced_abs[debit_mask] / rounding_unit) * rounding_unit
+        rounded_abs[credit_mask] = np.round(balanced_abs[credit_mask] / rounding_unit) * rounding_unit
+        
+        # 丸め後の貸借差額を計算
         rd_debit = rounded_abs[debit_mask]
         rd_credit = rounded_abs[credit_mask]
         td = rd_debit.sum()
         tc = rd_credit.sum()
         delta = td - tc
+        
+        # 差分を指定単位で丸めて調整
         if credit_mask.sum() > 0:
             idx0 = np.where(credit_mask)[0][0]
-            rounded_abs[idx0] += delta
+            adjustment = np.round(delta / rounding_unit) * rounding_unit
+            rounded_abs[idx0] += adjustment
+        
         final_abs = rounded_abs
     else:
         final_abs = balanced_abs
