@@ -65,7 +65,8 @@ def sample_accounts(master_df, sample_ratio_range=(0.8, 1.0), min_accounts=2):
     return sampled[['勘定科目コード', '貸借区分']]
 
 def generate_amounts(accounts_df, prev_abs=None, noise_level=0.1,
-                     min_amount=1000, max_amount=10000000, rounding_unit=1):
+                     min_amount=1000, max_amount=10000000, rounding_unit=1,
+                     allow_negative=False):
     count = len(accounts_df)
     drcr = accounts_df['貸借区分'].values
     # 絶対値生成（対数スケールで生成）
@@ -118,20 +119,29 @@ def generate_amounts(accounts_df, prev_abs=None, noise_level=0.1,
         final_abs = rounded_abs
     else:
         final_abs = balanced_abs
-    signed = final_abs * drcr
+    
+    if allow_negative:
+        # 貸借区分に基づいて符号を決定し、ランダムに反転
+        base_signs = drcr.copy()
+        flip_mask = np.random.choice([-1, 1], size=count)
+        signed = final_abs * base_signs * flip_mask
+    else:
+        # 常に正の数を生成
+        signed = final_abs
     return signed.astype(int), np.abs(final_abs)
 
-def generate_company_data(accounts_df, periods, noise_level=0.1, rounding_unit=1):
+def generate_company_data(accounts_df, periods, noise_level=0.1, rounding_unit=1, allow_negative=False):
     results = []
     prev_abs = None
     for _ in range(periods):
         signed, prev_abs = generate_amounts(
-            accounts_df, prev_abs, noise_level, rounding_unit=rounding_unit)
+            accounts_df, prev_abs, noise_level, rounding_unit=rounding_unit,
+            allow_negative=allow_negative)
         results.append(signed)
     return results
 
 def main(master_csv, company_master_csv, output_dir, periods, noise_level=0.1, rounding_unit=1,
-         parent_ratio_range=(0.9, 1.0), child_ratio_range=(0.7, 0.9)):
+         parent_ratio_range=(0.9, 1.0), child_ratio_range=(0.7, 0.9), allow_negative=False):
     master_df = load_master(master_csv)
     company_codes = load_company_master(company_master_csv)
     
@@ -155,7 +165,7 @@ def main(master_csv, company_master_csv, output_dir, periods, noise_level=0.1, r
         # サンプリング
         accounts = sample_accounts(master_df, sample_ratio_range=ratio_range)
         # データ生成
-        period_data = generate_company_data(accounts, periods, noise_level, rounding_unit)
+        period_data = generate_company_data(accounts, periods, noise_level, rounding_unit, allow_negative)
 
         # ファイル出力
         for p, amounts in enumerate(period_data, start=1):
@@ -181,13 +191,15 @@ if __name__ == '__main__':
                         help='Parent sample ratio range, e.g. "0.9,1.0"')
     parser.add_argument('--child-ratio', type=str, default='0.7,0.9',
                         help='Child sample ratio range, e.g. "0.7,0.9"')
+    parser.add_argument('--allow-negative', action='store_true',
+                        help='Allow negative amounts in generated data')
     args = parser.parse_args()
 
     parent_ratio = parse_ratio_range(args.parent_ratio)
     child_ratio = parse_ratio_range(args.child_ratio)
 
     main(args.master, args.company_master, args.output, args.periods, args.noise, args.rounding,
-         parent_ratio, child_ratio)
+         parent_ratio, child_ratio, args.allow_negative)
 
     # Usage:
     # python GenerateTestData.py --master account_master.csv --company-master company_master.csv
