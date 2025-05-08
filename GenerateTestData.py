@@ -4,29 +4,42 @@ from pathlib import Path
 
 def load_master(master_csv):
     """
-    マスタCSVから勘定科目コードと貸借区分を読み込む
+    マスタCSVから勘定科目コード、貸借区分、必須フラグを読み込む
     """
     df = pd.read_csv(
         master_csv,
         dtype={
             '勘定科目コード': str,
             '勘定科目名称': str,
-            '貸借区分': int
+            '貸借区分': int,
+            '必須': int
         }
     )
-    return df[['勘定科目コード', '貸借区分']]
+    return df[['勘定科目コード', '貸借区分', '必須']]
 
 def sample_accounts(master_df, sample_ratio_range=(0.8, 1.0), min_accounts=2):
     """
-    マスタから会社ごとの使用勘定科目をランダムサンプリングして返す
+    必須フラグONの勘定科目は必ず含め、残りをランダムサンプリングして返す
     """
+    # 必須勘定科目
+    required = master_df[master_df['必須'] == 1]
+    optional = master_df[master_df['必須'] != 1]
+
+    # サンプリング数の決定
     ratio = np.random.uniform(*sample_ratio_range)
-    n = max(int(ratio * len(master_df)), min_accounts)
-    sampled = master_df.sample(n).reset_index(drop=True)
-    return sampled
+    total_sample = max(int(ratio * len(master_df)), min_accounts)
+    optional_n = max(total_sample - len(required), 0)
+
+    # 任意勘定科目のサンプリング
+    sampled_optional = optional.sample(optional_n) if optional_n > 0 else pd.DataFrame(columns=master_df.columns)
+
+    # 結合してシャッフル
+    sampled = pd.concat([required, sampled_optional], ignore_index=True)
+    sampled = sampled.sample(frac=1).reset_index(drop=True)
+    return sampled[['勘定科目コード', '貸借区分']]
 
 def generate_amounts(accounts_df, prev_abs=None, noise_level=0.1,
-                     min_amount=1000, max_amount=10000000, rounding_unit=1):
+                     min_amount=100, max_amount=1000000, rounding_unit=1):
     """
     各勘定科目の金額を生成し、貸借を一致させ、指定桁で丸める
     - prev_abs: 前期の絶対値金額（numpy array、Noneなら初期生成）
@@ -43,45 +56,35 @@ def generate_amounts(accounts_df, prev_abs=None, noise_level=0.1,
         abs_vals = prev_abs * factors
         abs_vals = np.clip(abs_vals, 0, None)
 
-    # 貸借グループ分離
+    # 貸借グループ分離とバランス調整
     debit_mask = drcr == 1
     credit_mask = drcr == -1
     debit_vals = abs_vals[debit_mask]
     credit_vals = abs_vals[credit_mask]
     total_debit = debit_vals.sum()
     total_credit = credit_vals.sum()
-
-    # 貸借を一致させるために貸方をスケーリング
     if total_credit > 0:
         scaled_credit = credit_vals * (total_debit / total_credit)
     else:
         scaled_credit = np.zeros_like(credit_vals)
-
-    # 四捨五入
     debit_rounded = np.round(debit_vals)
     credit_rounded = np.round(scaled_credit)
-
-    # 誤差調整
     diff = total_debit - credit_rounded.sum()
     if credit_rounded.size > 0:
         credit_rounded[0] += diff
-
-    # 結合して符号付与
     balanced_abs = np.empty_like(abs_vals)
     balanced_abs[debit_mask] = debit_rounded
     balanced_abs[credit_mask] = credit_rounded
 
-    # 丸め処理
+    # 丸め処理（下位切り捨て）
     if rounding_unit and rounding_unit > 1:
-        # 下位切り捨て
         rounded_abs = np.floor(balanced_abs / rounding_unit) * rounding_unit
-        # 貸借一致維持のため調整
         rd_debit = rounded_abs[debit_mask]
         rd_credit = rounded_abs[credit_mask]
         td = rd_debit.sum()
         tc = rd_credit.sum()
         delta = td - tc
-        if credit_mask.sum() > 0 and rounding_unit:
+        if credit_mask.sum() > 0:
             idx0 = np.where(credit_mask)[0][0]
             rounded_abs[idx0] += delta
         final_abs = rounded_abs
