@@ -16,19 +16,11 @@ def load_account_master():
     df['account_code'] = df['account_code'].astype(str)
     return df
 
-def load_test_data():
-    """テストデータを読み込む"""
-    output_dir = Path('output')
-    test_data = []
-    
-    for file in output_dir.glob('*.txt'):
-        # タブ区切りのテキストファイルを読み込み
-        df = pd.read_csv(file, sep='\t', header=None, names=['account_code', 'amount'])
-        # account_codeを文字列型に変換
-        df['account_code'] = df['account_code'].astype(str)
-        test_data.append(df)
-    
-    return pd.concat(test_data, ignore_index=True)
+def load_single_file(file_path):
+    """単一のテストデータファイルを読み込む"""
+    df = pd.read_csv(file_path, sep='\t', header=None, names=['account_code', 'amount'])
+    df['account_code'] = df['account_code'].astype(str)
+    return df
 
 def check_balance(test_data, account_master):
     """貸借バランスをチェックする"""
@@ -41,8 +33,6 @@ def check_balance(test_data, account_master):
     )
     
     # 貸借区分に基づいて金額を計算
-    # balance_type = 1 の場合、正の金額が借方
-    # balance_type = -1 の場合、正の金額が貸方
     debit_entries = merged_data[merged_data['balance_type'] == 1]
     credit_entries = merged_data[merged_data['balance_type'] == -1]
     
@@ -56,32 +46,48 @@ def check_balance(test_data, account_master):
         'is_balanced': is_balanced,
         'debit_total': debit_total,
         'credit_total': credit_total,
-        'difference': debit_total - credit_total
+        'difference': debit_total - credit_total,
+        'details': merged_data
     }
+
+def print_balance_report(file_name, result, account_master_dict):
+    """バランスチェック結果を表示する"""
+    print(f'\n=== {file_name} の貸借バランスチェック結果 ===')
+    print(f'借方合計: {result["debit_total"]:,.0f}円')
+    print(f'貸方合計: {result["credit_total"]:,.0f}円')
+    print(f'差額: {result["difference"]:,.0f}円')
+    print(f'バランス状態: {"OK" if result["is_balanced"] else "NG"}')
+    
+    print('\n--- 勘定科目別集計 ---')
+    grouped = result['details'].groupby('account_code')['amount'].sum()
+    for code, amount in grouped.items():
+        name = account_master_dict.get(code, '不明')
+        print(f'{code} ({name}): {amount:,.0f}円')
 
 def main():
     try:
-        # データ読み込み
+        # 勘定科目マスタの読み込み
         account_master = load_account_master()
-        test_data = load_test_data()
-        
-        # バランスチェック実行
-        result = check_balance(test_data, account_master)
-        
-        # 結果表示
-        print('=== 貸借バランスチェック結果 ===')
-        print(f'借方合計: {result["debit_total"]:,.0f}円')
-        print(f'貸方合計: {result["credit_total"]:,.0f}円')
-        print(f'差額: {result["difference"]:,.0f}円')
-        print(f'バランス状態: {"OK" if result["is_balanced"] else "NG"}')
-        
-        # 詳細情報の表示
-        print('\n=== 勘定科目別集計 ===')
         account_master_dict = dict(zip(account_master['account_code'], account_master['account_name']))
-        grouped = test_data.groupby('account_code')['amount'].sum()
-        for code, amount in grouped.items():
-            name = account_master_dict.get(code, '不明')
-            print(f'{code} ({name}): {amount:,.0f}円')
+        
+        # outputディレクトリ内の全ファイルを処理
+        output_dir = Path('output')
+        all_balanced = True
+        
+        for file_path in sorted(output_dir.glob('*.txt')):
+            # ファイルごとにデータを読み込んでチェック
+            test_data = load_single_file(file_path)
+            result = check_balance(test_data, account_master)
+            
+            # 結果を表示
+            print_balance_report(file_path.name, result, account_master_dict)
+            
+            if not result['is_balanced']:
+                all_balanced = False
+        
+        # 全体の結果表示
+        print('\n=== 全体の判定 ===')
+        print(f'判定結果: {"OK" if all_balanced else "NG (バランスの合わないファイルが存在します)"}')
         
     except Exception as e:
         print(f'エラーが発生しました: {str(e)}')
