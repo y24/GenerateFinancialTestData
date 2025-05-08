@@ -68,13 +68,17 @@ def generate_amounts(accounts_df, prev_abs=None, noise_level=0.1,
                      min_amount=1000, max_amount=10000000, rounding_unit=1):
     count = len(accounts_df)
     drcr = accounts_df['貸借区分'].values
-    # 絶対値生成
+    # 絶対値生成（対数スケールで生成）
     if prev_abs is None:
-        abs_vals = np.random.randint(min_amount, max_amount + 1, size=count).astype(float)
+        # 対数スケールで一様分布を生成
+        log_min = np.log10(min_amount)
+        log_max = np.log10(max_amount)
+        log_vals = np.random.uniform(log_min, log_max, size=count)
+        abs_vals = np.power(10, log_vals)
     else:
         factors = np.random.normal(1, noise_level, size=count)
         abs_vals = prev_abs * factors
-        abs_vals = np.clip(abs_vals, 0, None)
+        abs_vals = np.clip(abs_vals, min_amount, max_amount)
     # 貸借バランス調整
     debit_mask = drcr == 1
     credit_mask = drcr == -1
