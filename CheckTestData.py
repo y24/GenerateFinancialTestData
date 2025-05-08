@@ -52,17 +52,28 @@ def check_balance(test_data, account_master):
 
 def print_balance_report(file_name, result, account_master_dict):
     """バランスチェック結果を表示する"""
-    print(f'\n=== {file_name} の貸借バランスチェック結果 ===')
+    print(f'\n========= {file_name} =========')
     print(f'借方合計: {result["debit_total"]:,.0f}円')
     print(f'貸方合計: {result["credit_total"]:,.0f}円')
     print(f'差額: {result["difference"]:,.0f}円')
     print(f'バランス状態: {"OK" if result["is_balanced"] else "NG"}')
     
-    print('\n--- 勘定科目別集計 ---')
+    print('\n--- 科目別集計 ---')
     grouped = result['details'].groupby('account_code')['amount'].sum()
     for code, amount in grouped.items():
         name = account_master_dict.get(code, '不明')
         print(f'{code} ({name}): {amount:,.0f}円')
+
+def print_summary_report(file_results):
+    """ファイルごとのバランス状態を一覧表示する"""
+    print('')
+    # ファイル名の長さを取得して、見やすく整形
+    max_filename_length = max(len(f) for f in file_results.keys())
+    
+    for file_name, result in sorted(file_results.items()):
+        status = "OK" if result['is_balanced'] else "NG"
+        # ファイル名を左寄せで、一定の幅で表示
+        print(f"{file_name:<{max_filename_length}} ... {status}")
 
 def main():
     try:
@@ -73,21 +84,28 @@ def main():
         # outputディレクトリ内の全ファイルを処理
         output_dir = Path('output')
         all_balanced = True
+        file_results = {}  # ファイルごとの結果を保存
         
         for file_path in sorted(output_dir.glob('*.txt')):
             # ファイルごとにデータを読み込んでチェック
             test_data = load_single_file(file_path)
             result = check_balance(test_data, account_master)
             
-            # 結果を表示
+            # 結果を保存
+            file_results[file_path.name] = result
+            
+            # 詳細な結果を表示
             print_balance_report(file_path.name, result, account_master_dict)
             
             if not result['is_balanced']:
                 all_balanced = False
         
-        # 全体の結果表示
-        print('\n=== 全体の判定 ===')
+        # 全体の判定とファイル別一覧を表示
+        print('\n=== チェック結果 ===')
         print(f'判定結果: {"OK" if all_balanced else "NG (バランスの合わないファイルが存在します)"}')
+        
+        # ファイル別一覧を表示
+        print_summary_report(file_results)
         
     except Exception as e:
         print(f'エラーが発生しました: {str(e)}')
