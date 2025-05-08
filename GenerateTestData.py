@@ -148,7 +148,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Generate test data for consolidated accounting system')
     parser.add_argument('--master', required=True, help='account master CSV path')
     parser.add_argument('--company-master', required=True, help='company master CSV path')
-    parser.add_argument('--output', required=True, help='output directory')
+    parser.add_argument('--output', type=str, default='output', help='output directory')
     parser.add_argument('--periods', type=int, default=2, help='number of periods')
     parser.add_argument('--noise', type=float, default=0.1, help='noise level for trends')
     parser.add_argument('--rounding', type=int, default=100, help='rounding unit (e.g.100,1000)')
@@ -166,4 +166,4 @@ if __name__ == '__main__':
          parent_ratio, child_ratio)
 
     # Usage:
-    # python GenerateTestData.py --master account_master.csv --company-master company_master.csv --output output
+    # python GenerateTestData.py --master account_master.csv --company-master company_master.csv
