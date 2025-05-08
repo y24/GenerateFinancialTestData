@@ -37,6 +37,18 @@ def load_company_master(company_master_csv):
     
     return df['会社コード'].tolist()
 
+# サンプリング比率をタプルに変換
+def parse_ratio_range(ratio_str: str) -> tuple[float, float]:
+    """カンマ区切りの文字列を比率範囲のタプルに変換する
+    
+    Args:
+        ratio_str: カンマ区切りの文字列 (例: "0.7,0.9")
+        
+    Returns:
+        比率範囲のタプル (例: (0.7, 0.9))
+    """
+    return tuple(map(float, ratio_str.split(',')))
+
 def sample_accounts(master_df, sample_ratio_range=(0.8, 1.0), min_accounts=2):
     """
     必須フラグONの勘定科目は必ず含め、残りをランダムサンプリングして返す
@@ -158,9 +170,8 @@ if __name__ == '__main__':
                         help='Child sample ratio range, e.g. "0.7,0.9"')
     args = parser.parse_args()
 
-    # サンプリング比率をタプルに変換
-    parent_ratio = tuple(map(float, args.parent_ratio.split(',')))
-    child_ratio = tuple(map(float, args.child_ratio.split(',')))
+    parent_ratio = parse_ratio_range(args.parent_ratio)
+    child_ratio = parse_ratio_range(args.child_ratio)
 
     main(args.master, args.company_master, args.output, args.periods, args.noise, args.rounding,
          parent_ratio, child_ratio)
