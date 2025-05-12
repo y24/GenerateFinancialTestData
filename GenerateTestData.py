@@ -174,7 +174,7 @@ def main(master_csv, company_master_csv, output_dir, periods, noise_level=0.1, r
                 '金額': amounts
             })
             file_path = output_dir / f"{company_code}_X{p}.txt"
-            df_out.to_csv(file_path, sep='\t', index=False, header=False)
+            df_out.to_csv(file_path, sep='\t', index=False, header=False, quoting=1)
 
     print(f"Generated data for {num_companies} companies over {periods} periods in {output_dir}")
 
