@@ -60,6 +60,7 @@ def print_balance_report(file_name, result, account_master_dict):
     
     print('\n--- 科目別集計 ---')
     grouped = result['details'].groupby('account_code')['amount'].sum()
+    print(f'科目数: {len(grouped)}')
     for code, amount in grouped.items():
         name = account_master_dict.get(code, '不明')
         print(f'{code} ({name}): {amount:,.0f}円')
