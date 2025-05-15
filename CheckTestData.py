@@ -4,7 +4,7 @@ from pathlib import Path
 
 def load_account_master():
     """勘定科目マスタを読み込む"""
-    df = pd.read_csv('account_master.csv')
+    df = pd.read_csv('master/account_master.csv')
     # カラム名を英語に変換
     df = df.rename(columns={
         '勘定科目コード': 'account_code',

@@ -209,9 +209,9 @@ def main(master_csv, company_master_csv, periods_master_csv, output_dir, noise_l
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description='Generate test data for consolidated accounting system')
-    parser.add_argument('--account-master', type=str, default='account_master.csv', help='account master CSV path')
-    parser.add_argument('--company-master', type=str, default='company_master.csv', help='company master CSV path')
-    parser.add_argument('--periods-master', type=str, default='periods_master.csv', help='periods master CSV path')
+    parser.add_argument('--account-master', type=str, default='master/account_master.csv', help='account master CSV path')
+    parser.add_argument('--company-master', type=str, default='master/company_master.csv', help='company master CSV path')
+    parser.add_argument('--periods-master', type=str, default='master/periods_master.csv', help='periods master CSV path')
     parser.add_argument('--output', type=str, default='output', help='output directory')
     parser.add_argument('--noise', type=float, default=0.4, help='noise level for trends')
     parser.add_argument('--rounding', type=int, default=100, help='rounding unit (e.g.100,1000)')
@@ -232,4 +232,4 @@ if __name__ == '__main__':
          parent_ratio, child_ratio, args.allow_negative, args.cumulative)
 
     # Usage:
-    # python GenerateTestData.py --account-master account_master.csv --company-master company_master.csv --periods-master periods_master.csv
+    # python GenerateTestData.py --account-master master/account_master.csv --company-master master/company_master.csv --periods-master master/periods_master.csv
