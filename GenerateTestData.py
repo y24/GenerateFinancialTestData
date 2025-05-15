@@ -26,12 +26,12 @@ def load_master(master_csv):
 
 def load_company_master(company_master_csv):
     """
-    会社マスタCSVから会社コードを読み込む
+    会社マスタCSVから会社コードとセグメントコードを読み込む
     重複チェックも行う
     """
     df = pd.read_csv(
         company_master_csv,
-        dtype={'会社コード': str},
+        dtype={'会社コード': str, 'セグメントコード': str},
         keep_default_na=False
     )
     
@@ -41,7 +41,7 @@ def load_company_master(company_master_csv):
         duplicate_codes = df[duplicates]['会社コード'].unique()
         raise ValueError(f"会社コードが重複しています: {', '.join(duplicate_codes)}")
     
-    return df['会社コード'].tolist()
+    return df[['会社コード', 'セグメントコード']]
 
 # サンプリング比率をタプルに変換
 def parse_ratio_range(ratio_str: str) -> tuple[float, float]:
@@ -160,14 +160,14 @@ def main(master_csv, company_master_csv, output_dir, periods, noise_level=0.1, r
     if len(company_codes) < 2:
         raise ValueError("会社マスタには少なくとも親会社と1つの子会社が必要です")
     
-    parent_code = company_codes[0]
-    child_codes = company_codes[1:]
+    parent_code = company_codes['会社コード'].iloc[0]
+    child_codes = company_codes['会社コード'].iloc[1:].tolist()
     num_companies = len(company_codes)
     
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    for idx, company_code in enumerate(company_codes):
+    for idx, company_code in enumerate(company_codes['会社コード']):
         # 親会社は多め、子会社は少なめ
         if idx == 0:
             ratio_range = parent_ratio_range
@@ -185,7 +185,8 @@ def main(master_csv, company_master_csv, output_dir, periods, noise_level=0.1, r
                 '勘定科目コード': accounts['勘定科目コード'].values,
                 '金額': amounts
             })
-            file_path = output_dir / f"FST{company_code}_X{p}.txt"
+            segment_code = company_codes.iloc[idx]['セグメントコード']
+            file_path = output_dir / f"FST01{company_code}{segment_code}_X{p}.txt"
             df_out.to_csv(file_path, sep='\t', index=False, header=False, quoting=1)
 
     print(f"Generated data for {num_companies} companies over {periods} periods in {output_dir}")
