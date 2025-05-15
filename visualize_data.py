@@ -13,32 +13,38 @@ def load_company_data(output_dir):
     output_dir = Path(output_dir)
     company_data = {}
     
-    # ファイル名から会社コードと期間を抽出する正規表現
-    pattern = r'([A-Za-z0-9]+)_X(\d+)\.txt'
+    # ファイル名から会社コード、会社名、期間を抽出する正規表現
+    pattern = r'FST01(\d{8})(\d{5})(\d{3})_([^-]+)-([^.]+)\.txt'
     
     # 出力ディレクトリの存在確認
     if not output_dir.exists():
         raise FileNotFoundError(f"出力ディレクトリが見つかりません: {output_dir}")
     
     # ファイル一覧を表示
-    files = list(output_dir.glob('*_X*.txt'))
+    files = list(output_dir.glob('FST01*.txt'))
     print(f"見つかったファイル数: {len(files)}")
     
     for file_path in files:
         print(f"処理中のファイル: {file_path}")
         match = re.match(pattern, file_path.name)
         if match:
-            company_code = match.group(1)
-            period = int(match.group(2))
+            fiscal_date = match.group(1)
+            company_code = match.group(2)
+            segment_code = match.group(3)
+            company_name = match.group(4)
+            period = match.group(5)
             
             # データを読み込む
             df = pd.read_csv(file_path, sep='\t', header=None, names=['勘定科目コード', '金額'])
             
             if company_code not in company_data:
-                company_data[company_code] = {}
+                company_data[company_code] = {
+                    'name': company_name,
+                    'periods': {}
+                }
             
-            company_data[company_code][period] = df['金額'].sum()
-            print(f"会社コード {company_code} の期間 {period} の合計金額: {company_data[company_code][period]:,}")
+            company_data[company_code]['periods'][period] = df['金額'].sum()
+            print(f"会社コード {company_code}（{company_name}）の期間 {period} の合計金額: {company_data[company_code]['periods'][period]:,}")
     
     if not company_data:
         raise ValueError("データが見つかりませんでした。")
@@ -51,21 +57,24 @@ def plot_company_trends(company_data, output_dir):
     """
     plt.figure(figsize=(12, 6))
     
-    for company_code, periods in company_data.items():
+    for company_code, data in company_data.items():
+        company_name = data['name']
+        periods = data['periods']
+        
         # 期間と金額のリストを作成
         x = sorted(periods.keys())
         y = [periods[p] for p in x]
         
         # 折れ線グラフを描画
-        plt.plot(x, y, marker='o', label=f'会社コード: {company_code}')
+        plt.plot(x, y, marker='o', label=f'{company_name}（{company_code}）')
     
     plt.title('会社別の期間推移')
     plt.xlabel('期間')
     plt.ylabel('合計金額')
     plt.grid(True)
     
-    # 横軸の目盛りを整数のみに設定
-    plt.xticks(x)
+    # 横軸の目盛りを設定
+    plt.xticks(rotation=45)
     
     # 縦軸の目盛りを整数のみに設定
     y_ticks = plt.yticks()[0]
@@ -78,6 +87,7 @@ def plot_company_trends(company_data, output_dir):
         print("警告: 凡例に表示するデータが見つかりませんでした。")
     
     # グラフを保存
+    plt.tight_layout()  # ラベルが切れないように調整
     plt.savefig(f'{output_dir}/company_trends.png')
     plt.close()
 

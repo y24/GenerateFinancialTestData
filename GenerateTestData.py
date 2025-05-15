@@ -26,12 +26,12 @@ def load_master(master_csv):
 
 def load_company_master(company_master_csv):
     """
-    会社マスタCSVから会社コードとセグメントコードを読み込む
+    会社マスタCSVから会社コード、セグメントコード、会社名を読み込む
     重複チェックも行う
     """
     df = pd.read_csv(
         company_master_csv,
-        dtype={'会社コード': str, 'セグメントコード': str},
+        dtype={'会社コード': str, 'セグメントコード': str, '会社名': str},
         keep_default_na=False
     )
     
@@ -41,7 +41,18 @@ def load_company_master(company_master_csv):
         duplicate_codes = df[duplicates]['会社コード'].unique()
         raise ValueError(f"会社コードが重複しています: {', '.join(duplicate_codes)}")
     
-    return df[['会社コード', 'セグメントコード']]
+    return df[['会社コード', 'セグメントコード', '会社名']]
+
+def load_periods_master(periods_master_csv):
+    """
+    期間マスタCSVから期末年月日と期間を読み込む
+    """
+    df = pd.read_csv(
+        periods_master_csv,
+        dtype={'期末年月日': str, '期間': str},
+        keep_default_na=False
+    )
+    return df
 
 # サンプリング比率をタプルに変換
 def parse_ratio_range(ratio_str: str) -> tuple[float, float]:
@@ -152,10 +163,11 @@ def generate_company_data(accounts_df, periods, noise_level=0.1, rounding_unit=1
         results.append(signed)
     return results
 
-def main(master_csv, company_master_csv, output_dir, periods, noise_level=0.1, rounding_unit=1,
+def main(master_csv, company_master_csv, periods_master_csv, output_dir, noise_level=0.1, rounding_unit=1,
          parent_ratio_range=(0.9, 1.0), child_ratio_range=(0.7, 0.9), allow_negative=False, cumulative=True):
     master_df = load_master(master_csv)
     company_codes = load_company_master(company_master_csv)
+    periods_df = load_periods_master(periods_master_csv)
     
     if len(company_codes) < 2:
         raise ValueError("会社マスタには少なくとも親会社と1つの子会社が必要です")
@@ -177,27 +189,30 @@ def main(master_csv, company_master_csv, output_dir, periods, noise_level=0.1, r
         # サンプリング
         accounts = sample_accounts(master_df, is_parent=(idx == 0), sample_ratio_range=ratio_range)
         # データ生成
-        period_data = generate_company_data(accounts, periods, noise_level, rounding_unit, allow_negative, cumulative)
+        period_data = generate_company_data(accounts, len(periods_df), noise_level, rounding_unit, allow_negative, cumulative)
 
         # ファイル出力
-        for p, amounts in enumerate(period_data, start=1):
+        for p, (_, period_row) in enumerate(periods_df.iterrows(), start=1):
             df_out = pd.DataFrame({
                 '勘定科目コード': accounts['勘定科目コード'].values,
-                '金額': amounts
+                '金額': period_data[p-1]
             })
             segment_code = company_codes.iloc[idx]['セグメントコード']
-            file_path = output_dir / f"FST01{company_code}{segment_code}_X{p}.txt"
+            company_name = company_codes.iloc[idx]['会社名']
+            fiscal_date = period_row['期末年月日']
+            period = period_row['期間']
+            file_path = output_dir / f"FST01{fiscal_date}{company_code}{segment_code}_{company_name}-{period}.txt"
             df_out.to_csv(file_path, sep='\t', index=False, header=False, quoting=1)
 
-    print(f"Generated data for {num_companies} companies over {periods} periods in {output_dir}")
+    print(f"Generated data for {num_companies} companies over {len(periods_df)} periods in {output_dir}")
 
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description='Generate test data for consolidated accounting system')
     parser.add_argument('--account-master', type=str, default='account_master.csv', help='account master CSV path')
     parser.add_argument('--company-master', type=str, default='company_master.csv', help='company master CSV path')
+    parser.add_argument('--periods-master', type=str, default='periods_master.csv', help='periods master CSV path')
     parser.add_argument('--output', type=str, default='output', help='output directory')
-    parser.add_argument('--periods', type=int, default=3, help='number of periods')
     parser.add_argument('--noise', type=float, default=0.4, help='noise level for trends')
     parser.add_argument('--rounding', type=int, default=100, help='rounding unit (e.g.100,1000)')
     parser.add_argument('--parent-ratio', type=str, default='0.9,1.0',
@@ -213,8 +228,8 @@ if __name__ == '__main__':
     parent_ratio = parse_ratio_range(args.parent_ratio)
     child_ratio = parse_ratio_range(args.child_ratio)
 
-    main(args.account_master, args.company_master, args.output, args.periods, args.noise, args.rounding,
+    main(args.account_master, args.company_master, args.periods_master, args.output, args.noise, args.rounding,
          parent_ratio, child_ratio, args.allow_negative, args.cumulative)
 
     # Usage:
-    # python GenerateTestData.py --account-master account_master.csv --company-master company_master.csv --periods 3
+    # python GenerateTestData.py --account-master account_master.csv --company-master company_master.csv --periods-master periods_master.csv
