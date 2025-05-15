@@ -4,6 +4,7 @@ from pathlib import Path
 import re
 import traceback
 import sys
+import japanize_matplotlib
 
 def load_company_data(output_dir):
     """
@@ -44,7 +45,7 @@ def load_company_data(output_dir):
     
     return company_data
 
-def plot_company_trends(company_data):
+def plot_company_trends(company_data, output_dir):
     """
     会社別のトレンドを折れ線グラフで表示
     """
@@ -70,7 +71,7 @@ def plot_company_trends(company_data):
         print("警告: 凡例に表示するデータが見つかりませんでした。")
     
     # グラフを保存
-    plt.savefig('company_trends.png')
+    plt.savefig(f'{output_dir}/company_trends.png')
     plt.close()
 
 def main():
@@ -84,7 +85,7 @@ def main():
         company_data = load_company_data(output_dir)
         
         # グラフを描画
-        plot_company_trends(company_data)
+        plot_company_trends(company_data, output_dir)
         print('グラフを company_trends.png として保存しました。')
         
     except Exception as e:

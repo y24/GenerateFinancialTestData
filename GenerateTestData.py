@@ -210,4 +210,4 @@ if __name__ == '__main__':
          parent_ratio, child_ratio, args.allow_negative)
 
     # Usage:
-    # python GenerateTestData.py --master account_master.csv --company-master company_master.csv
+    # python GenerateTestData.py --master account_master.csv --company-master company_master.csv --periods 3
