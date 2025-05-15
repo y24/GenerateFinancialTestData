@@ -74,7 +74,7 @@ def sample_accounts(master_df, is_parent=True, sample_ratio_range=(0.8, 1.0), mi
 
 def generate_amounts(accounts_df, prev_abs=None, noise_level=0.1,
                      min_amount=1000, max_amount=10000000, rounding_unit=1,
-                     allow_negative=False):
+                     allow_negative=False, cumulative=True):
     count = len(accounts_df)
     drcr = accounts_df['貸借区分'].values
     # 絶対値生成（対数スケールで生成）
@@ -85,7 +85,11 @@ def generate_amounts(accounts_df, prev_abs=None, noise_level=0.1,
         log_vals = np.random.uniform(log_min, log_max, size=count)
         abs_vals = np.power(10, log_vals)
     else:
-        factors = np.random.normal(1, noise_level, size=count)
+        if cumulative:
+            # 累計データの場合、前の期よりも大きくなるように生成
+            factors = np.random.uniform(1.0, 1.0 + noise_level, size=count)
+        else:
+            factors = np.random.normal(1, noise_level, size=count)
         abs_vals = prev_abs * factors
         abs_vals = np.clip(abs_vals, min_amount, max_amount)
     # 貸借バランス調整
@@ -138,18 +142,18 @@ def generate_amounts(accounts_df, prev_abs=None, noise_level=0.1,
         signed = final_abs
     return signed.astype(int), np.abs(final_abs)
 
-def generate_company_data(accounts_df, periods, noise_level=0.1, rounding_unit=1, allow_negative=False):
+def generate_company_data(accounts_df, periods, noise_level=0.1, rounding_unit=1, allow_negative=False, cumulative=True):
     results = []
     prev_abs = None
     for _ in range(periods):
         signed, prev_abs = generate_amounts(
             accounts_df, prev_abs, noise_level, rounding_unit=rounding_unit,
-            allow_negative=allow_negative)
+            allow_negative=allow_negative, cumulative=cumulative)
         results.append(signed)
     return results
 
 def main(master_csv, company_master_csv, output_dir, periods, noise_level=0.1, rounding_unit=1,
-         parent_ratio_range=(0.9, 1.0), child_ratio_range=(0.7, 0.9), allow_negative=False):
+         parent_ratio_range=(0.9, 1.0), child_ratio_range=(0.7, 0.9), allow_negative=False, cumulative=True):
     master_df = load_master(master_csv)
     company_codes = load_company_master(company_master_csv)
     
@@ -173,7 +177,7 @@ def main(master_csv, company_master_csv, output_dir, periods, noise_level=0.1, r
         # サンプリング
         accounts = sample_accounts(master_df, is_parent=(idx == 0), sample_ratio_range=ratio_range)
         # データ生成
-        period_data = generate_company_data(accounts, periods, noise_level, rounding_unit, allow_negative)
+        period_data = generate_company_data(accounts, periods, noise_level, rounding_unit, allow_negative, cumulative)
 
         # ファイル出力
         for p, amounts in enumerate(period_data, start=1):
@@ -193,7 +197,7 @@ if __name__ == '__main__':
     parser.add_argument('--company-master', type=str, default='company_master.csv', help='company master CSV path')
     parser.add_argument('--output', type=str, default='output', help='output directory')
     parser.add_argument('--periods', type=int, default=3, help='number of periods')
-    parser.add_argument('--noise', type=float, default=0.3, help='noise level for trends')
+    parser.add_argument('--noise', type=float, default=0.4, help='noise level for trends')
     parser.add_argument('--rounding', type=int, default=100, help='rounding unit (e.g.100,1000)')
     parser.add_argument('--parent-ratio', type=str, default='0.9,1.0',
                         help='Parent sample ratio range, e.g. "0.9,1.0"')
@@ -201,13 +205,15 @@ if __name__ == '__main__':
                         help='Child sample ratio range, e.g. "0.4,0.6"')
     parser.add_argument('--allow-negative', action='store_true',
                         help='Allow negative amounts in generated data')
+    parser.add_argument('--cumulative', action='store_true', default=True,
+                        help='Generate cumulative data (default: True)')
     args = parser.parse_args()
 
     parent_ratio = parse_ratio_range(args.parent_ratio)
     child_ratio = parse_ratio_range(args.child_ratio)
 
     main(args.account_master, args.company_master, args.output, args.periods, args.noise, args.rounding,
-         parent_ratio, child_ratio, args.allow_negative)
+         parent_ratio, child_ratio, args.allow_negative, args.cumulative)
 
     # Usage:
     # python GenerateTestData.py --account-master account_master.csv --company-master company_master.csv --periods 3
