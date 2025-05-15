@@ -64,6 +64,9 @@ def plot_company_trends(company_data, output_dir):
     plt.ylabel('合計金額')
     plt.grid(True)
     
+    # 横軸の目盛りを整数のみに設定
+    plt.xticks(x)
+    
     # 凡例が空でないことを確認
     if plt.gca().get_legend_handles_labels()[0]:
         plt.legend()
