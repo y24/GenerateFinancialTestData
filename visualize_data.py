@@ -67,6 +67,10 @@ def plot_company_trends(company_data, output_dir):
     # 横軸の目盛りを整数のみに設定
     plt.xticks(x)
     
+    # 縦軸の目盛りを整数のみに設定
+    y_ticks = plt.yticks()[0]
+    plt.yticks(y_ticks, [int(y) for y in y_ticks])
+    
     # 凡例が空でないことを確認
     if plt.gca().get_legend_handles_labels()[0]:
         plt.legend()
