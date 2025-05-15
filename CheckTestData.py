@@ -53,14 +53,14 @@ def check_balance(test_data, account_master):
 def print_balance_report(file_name, result, account_master_dict):
     """バランスチェック結果を表示する"""
     print(f'\n========= {file_name} =========')
+    print(f'科目数: {len(result["details"])}')
     print(f'借方合計: {result["debit_total"]:,.0f}円')
     print(f'貸方合計: {result["credit_total"]:,.0f}円')
     print(f'差額: {result["difference"]:,.0f}円')
     print(f'バランス状態: {"OK" if result["is_balanced"] else "NG"}')
-    
     print('\n--- 科目別集計 ---')
     grouped = result['details'].groupby('account_code')['amount'].sum()
-    print(f'科目数: {len(grouped)}')
+    
     for code, amount in grouped.items():
         name = account_master_dict.get(code, '不明')
         print(f'{code} ({name}): {amount:,.0f}円')
