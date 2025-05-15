@@ -4,7 +4,7 @@ from pathlib import Path
 
 def load_master(master_csv):
     """
-    マスタCSVから勘定科目コード、貸借区分、必須フラグを読み込む
+    マスタCSVから勘定科目コード、貸借区分、親会社必須フラグ、子会社必須フラグを読み込む
     """
     df = pd.read_csv(
         master_csv,
@@ -12,11 +12,17 @@ def load_master(master_csv):
         keep_default_na=False
     )
     # 必須列がなければ0で初期化、空白や欠損は0扱い
-    if '必須' not in df.columns:
-        df['必須'] = 0
+    if '親会社必須' not in df.columns:
+        df['親会社必須'] = 0
     else:
-        df['必須'] = df['必須'].replace('', '0').astype(int)
-    return df[['勘定科目コード', '貸借区分', '必須']]
+        df['親会社必須'] = df['親会社必須'].replace('', '0').astype(int)
+    
+    if '子会社必須' not in df.columns:
+        df['子会社必須'] = 0
+    else:
+        df['子会社必須'] = df['子会社必須'].replace('', '0').astype(int)
+    
+    return df[['勘定科目コード', '貸借区分', '親会社必須', '子会社必須']]
 
 def load_company_master(company_master_csv):
     """
@@ -49,13 +55,15 @@ def parse_ratio_range(ratio_str: str) -> tuple[float, float]:
     """
     return tuple(map(float, ratio_str.split(',')))
 
-def sample_accounts(master_df, sample_ratio_range=(0.8, 1.0), min_accounts=2):
+def sample_accounts(master_df, is_parent=True, sample_ratio_range=(0.8, 1.0), min_accounts=2):
     """
     必須フラグONの勘定科目は必ず含め、残りをランダムサンプリングして返す
+    is_parent: 親会社のデータを生成する場合はTrue、子会社の場合はFalse
     sample_ratio_range: 全体母数に対するサンプリング比の範囲
     """
-    required = master_df[master_df['必須'] == 1]
-    optional = master_df[master_df['必須'] != 1]
+    required_col = '親会社必須' if is_parent else '子会社必須'
+    required = master_df[master_df[required_col] == 1]
+    optional = master_df[master_df[required_col] != 1]
     ratio = np.random.uniform(*sample_ratio_range)
     total_sample = max(int(ratio * len(master_df)), min_accounts)
     optional_n = max(total_sample - len(required), 0)
@@ -163,7 +171,7 @@ def main(master_csv, company_master_csv, output_dir, periods, noise_level=0.1, r
             ratio_range = child_ratio_range
 
         # サンプリング
-        accounts = sample_accounts(master_df, sample_ratio_range=ratio_range)
+        accounts = sample_accounts(master_df, is_parent=(idx == 0), sample_ratio_range=ratio_range)
         # データ生成
         period_data = generate_company_data(accounts, periods, noise_level, rounding_unit, allow_negative)
 
@@ -185,12 +193,12 @@ if __name__ == '__main__':
     parser.add_argument('--company-master', required=True, help='company master CSV path')
     parser.add_argument('--output', type=str, default='output', help='output directory')
     parser.add_argument('--periods', type=int, default=2, help='number of periods')
-    parser.add_argument('--noise', type=float, default=0.1, help='noise level for trends')
+    parser.add_argument('--noise', type=float, default=0.3, help='noise level for trends')
     parser.add_argument('--rounding', type=int, default=100, help='rounding unit (e.g.100,1000)')
     parser.add_argument('--parent-ratio', type=str, default='0.9,1.0',
                         help='Parent sample ratio range, e.g. "0.9,1.0"')
-    parser.add_argument('--child-ratio', type=str, default='0.7,0.9',
-                        help='Child sample ratio range, e.g. "0.7,0.9"')
+    parser.add_argument('--child-ratio', type=str, default='0.4,0.6',
+                        help='Child sample ratio range, e.g. "0.4,0.6"')
     parser.add_argument('--allow-negative', action='store_true',
                         help='Allow negative amounts in generated data')
     args = parser.parse_args()
