@@ -111,3 +111,6 @@ def main():
 
 if __name__ == '__main__':
     main() 
+
+# Usage:
+# python visualize_data.py

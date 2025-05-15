@@ -232,4 +232,5 @@ if __name__ == '__main__':
          parent_ratio, child_ratio, args.allow_negative, args.cumulative)
 
     # Usage:
-    # python GenerateTestData.py --account-master master/account_master.csv --company-master master/company_master.csv --periods-master master/periods_master.csv
+    # python generate_data.py --account-master master/account_master.csv --company-master master/company_master.csv --periods-master master/periods_master.csv
+    

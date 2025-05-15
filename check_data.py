@@ -115,4 +115,4 @@ if __name__ == '__main__':
     main()
 
 # Usage:
-# python CheckTestData.py
+# python check_data.py
